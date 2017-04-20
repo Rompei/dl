@@ -58,7 +58,7 @@ func main() {
 	idx := 0
 	for scanner.Scan() {
 		u := scanner.Text()
-		fmt.Printf("Downloading: %s", u)
+		fmt.Printf("Downloading: %s\n", u)
 		var f *File
 		if isIndex {
 			ext := filepath.Ext(u)
