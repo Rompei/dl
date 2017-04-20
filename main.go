@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+// BufSize is size of buffer of a channel.
+const BufSize = 1024
+
 // File is file object.
 type File struct {
 	SavePath string
@@ -45,7 +48,7 @@ func main() {
 	chs := make([]chan *File, proc)
 
 	for i := 0; i < proc; i++ {
-		ch := make(chan *File)
+		ch := make(chan *File, BufSize)
 		chs[i] = ch
 		downloadQueue(ctx, ch, errCh)
 	}
@@ -101,6 +104,7 @@ func main() {
 			break
 		}
 	}
+	fmt.Println("Finished.")
 }
 
 func downloadQueue(ctx context.Context, fileCh chan *File, errCh chan error) {
