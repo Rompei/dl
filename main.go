@@ -38,16 +38,25 @@ func main() {
 	// Setting timeout.
 	http.DefaultClient.Timeout = 30 * time.Second
 
-	fileCh := make(chan *File, proc)
 	errCh := make(chan error, proc)
-	defer close(fileCh)
 	defer close(errCh)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
+	chs := make([]chan *File, proc)
 
 	for i := 0; i < proc; i++ {
-		downloadQueue(ctx, fileCh, errCh)
+		ch := make(chan *File)
+		chs[i] = ch
+		downloadQueue(ctx, ch, errCh)
 	}
+
+	defer func() {
+		for i := range chs {
+			close(chs[i])
+		}
+	}()
+
+	defer cancel()
 
 	fp, err := os.Open(input)
 	if err != nil {
@@ -58,7 +67,6 @@ func main() {
 	idx := 0
 	for scanner.Scan() {
 		u := scanner.Text()
-		fmt.Printf("Downloading: %s\n", u)
 		var f *File
 		if isIndex {
 			ext := filepath.Ext(u)
@@ -73,7 +81,9 @@ func main() {
 				URL:      u,
 			}
 		}
-		fileCh <- f
+		rtn := idx % proc
+		fmt.Printf("Downloading: %s on proc %d\n", u, rtn)
+		chs[rtn] <- f
 		idx++
 	}
 	if err := scanner.Err(); err != nil {
