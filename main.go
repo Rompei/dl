@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -11,8 +12,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 // File is file object.
