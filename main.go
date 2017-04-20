@@ -4,14 +4,16 @@ import (
 	"bufio"
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"time"
+
+	"github.com/cheggaaa/pb"
 )
 
 // BufSize is size of buffer of a channel.
@@ -21,6 +23,7 @@ const BufSize = 1024
 type File struct {
 	SavePath string
 	URL      string
+	Err      error
 }
 
 func main() {
@@ -38,19 +41,27 @@ func main() {
 	flag.BoolVar(&isIndex, "i", false, "Index file or finename")
 	flag.Parse()
 
-	// Setting timeout.
+	// Set the number of goroutine
+	runtime.GOMAXPROCS(runtime.NumCPU() - 1)
+
+	// Set http timeout
 	http.DefaultClient.Timeout = 30 * time.Second
 
-	errCh := make(chan error, proc)
-	defer close(errCh)
+	// Make channel for output
+	resCh := make(chan *File, proc)
+	defer close(resCh)
+
+	// Initialize context
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Make channel for input
 	chs := make([]chan *File, proc)
 
+	// Execute queue.
 	for i := 0; i < proc; i++ {
 		ch := make(chan *File, BufSize)
 		chs[i] = ch
-		downloadQueue(ctx, ch, errCh)
+		downloadQueue(ctx, ch, resCh)
 	}
 
 	defer func() {
@@ -61,6 +72,7 @@ func main() {
 
 	defer cancel()
 
+	// Open input file.
 	fp, err := os.Open(input)
 	if err != nil {
 		log.Fatal(err)
@@ -85,40 +97,39 @@ func main() {
 			}
 		}
 		rtn := idx % proc
-		fmt.Printf("Downloading: %s on proc %d\n", u, rtn)
 		chs[rtn] <- f
 		idx++
 	}
 	if err := scanner.Err(); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println()
+
+	bar := pb.StartNew(idx)
 
 	finished := 0
-	for err := range errCh {
+	for res := range resCh {
 		finished++
-		if err != nil {
-			log.Println(err)
+		if res.Err != nil {
+			log.Println(res.Err)
 		}
 		if finished == idx {
 			break
 		}
+		bar.Increment()
 	}
-	fmt.Println("Finished.")
+	bar.Increment()
+	bar.FinishPrint("Finished!")
 }
 
-func downloadQueue(ctx context.Context, fileCh chan *File, errCh chan error) {
+func downloadQueue(ctx context.Context, fileCh chan *File, resCh chan *File) {
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case f := <-fileCh:
-				if err := download(f); err != nil {
-					errCh <- err
-					continue
-				}
-				errCh <- nil
+				f.Err = download(f)
+				resCh <- f
 			default:
 			}
 		}
