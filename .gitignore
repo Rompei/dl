@@ -16,5 +16,6 @@
 .glide/
 
 dl
-list.txt
+list*
 data
+test*
