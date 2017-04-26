@@ -13,11 +13,14 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Code-Hex/pget"
 	"github.com/cheggaaa/pb"
 )
 
 // BufSize is size of buffer of a channel.
 const BufSize = 1024
+
+var proc int
 
 // File is file object.
 type File struct {
@@ -31,7 +34,6 @@ func main() {
 	var (
 		input   string
 		output  string
-		proc    int
 		isIndex bool
 	)
 
@@ -137,6 +139,12 @@ func downloadQueue(ctx context.Context, fileCh chan *File, resCh chan *File) {
 }
 
 func download(f *File) (err error) {
+
+	if err = downloadWithPget(f); err == nil {
+		return
+	}
+	log.Println(err)
+
 	res, err := http.Get(f.URL)
 	if err != nil {
 		return
@@ -153,4 +161,28 @@ func download(f *File) (err error) {
 		return
 	}
 	return
+}
+
+func downloadWithPget(f *File) (err error) {
+	p := pget.New()
+	p.URLs = append(p.URLs, f.URL)
+	dirName := filepath.Dir(f.SavePath)
+	p.TargetDir = dirName
+	fname := filepath.Base(f.SavePath)
+	p.Utils.SetFileName(fname)
+	if err = p.Checking(); err != nil {
+		return
+	}
+
+	p.Procs = proc
+
+	if err = p.Download(); err != nil {
+		return
+	}
+
+	if err = p.Utils.BindwithFiles(proc); err != nil {
+		return
+	}
+	return
+
 }
